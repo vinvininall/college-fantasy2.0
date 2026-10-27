@@ -188,3 +188,93 @@ export async function performance(t) {
     matchesCounted: matches.length,
   };
 }
+
+export async function livePerformance(t) {
+  const matches = await Match.find({
+    tournament: t._id,
+    status: "live",
+  }).lean();
+  if (!matches.length)
+    return {
+      matchesCounted: 0,
+      points: new Map(),
+      details: new Map(),
+    };
+
+  const [teams, events, squads] = await Promise.all([
+    Team.find({ tournament: t._id }).distinct("_id"),
+    MatchEvent.find({
+      match: { $in: matches.map((match) => match._id) },
+    }).lean(),
+    FantasySquad.find({ tournament: t._id, complete: true }).lean(),
+  ]);
+  const players = await Player.find({ team: { $in: teams } }).lean();
+  const eventsByMatch = new Map(
+    matches.map((match) => [String(match._id), []]),
+  );
+  for (const event of events)
+    eventsByMatch.get(String(event.match))?.push(event);
+  const breakdowns = [...eventsByMatch].map(([matchId, matchEvents]) => [
+    matchId,
+    scoreEvents(matchEvents, players, t.scoring),
+  ]);
+  const points = new Map();
+  const details = new Map();
+  const rules = scoringRules(t.scoring);
+  const playerById = new Map(
+    players.map((player) => [String(player._id), player]),
+  );
+  for (const squad of squads) {
+    const user = String(squad.user);
+    const playerDetails = new Map(
+      squad.players.map((id) => {
+        const playerId = String(id);
+        const player = playerById.get(playerId);
+        const starter = squad.starters.some(
+          (starterId) => String(starterId) === playerId,
+        );
+        const role = !starter
+          ? "bench"
+          : String(squad.captain) === playerId
+            ? "captain"
+            : String(squad.viceCaptain) === playerId
+              ? "vice-captain"
+              : "starter";
+        return [
+          playerId,
+          {
+            player: playerId,
+            name: player?.name,
+            position: player?.position,
+            base: 0,
+            multiplier: !starter
+              ? 0
+              : role === "captain"
+                ? rules.captain
+                : role === "vice-captain"
+                  ? rules.viceCaptain
+                  : 1,
+            role,
+            points: 0,
+            events: [],
+          },
+        ];
+      }),
+    );
+    for (const [, breakdown] of breakdowns) {
+      for (const score of scoreSquad(squad, breakdown, rules)) {
+        const detail = playerDetails.get(score.player);
+        detail.base += score.base;
+        detail.points += score.points;
+        detail.events.push(...(score.events || []));
+      }
+    }
+    const squadDetails = [...playerDetails.values()];
+    points.set(
+      user,
+      squadDetails.reduce((total, detail) => total + detail.points, 0),
+    );
+    details.set(user, squadDetails);
+  }
+  return { matchesCounted: matches.length, points, details };
+}

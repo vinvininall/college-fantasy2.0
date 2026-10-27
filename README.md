@@ -60,7 +60,8 @@ The demo seed's disabled organizer account cannot sign in and has no administrat
 - Manage teams, prices, player positions, fixtures, results and match events as an administrator.
 - Import up to 100 teams and 1,000 players per tournament using a validated JSON roster.
 - Correct events and immediately see recalculated fantasy points and finalized match scores.
-- View shared leaderboard ranks, personal performance and individual point breakdowns.
+- View manager leaderboard totals and ranks that refresh during live matches; live contributions are labeled provisional and become finalized when the match ends.
+- View personal performance and player breakdowns with completed-match totals plus clearly labeled provisional live points that refresh automatically.
 - Use the responsive interface on desktop, tablet and mobile, with keyboard focus styles and labeled forms.
 
 ## Architecture and project structure

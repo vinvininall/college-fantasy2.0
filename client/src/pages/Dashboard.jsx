@@ -1,16 +1,8 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useContext } from "react";
 import { Link } from "react-router-dom";
-import { api, rupees } from "../api";
+import { rupees } from "../api";
 import { Session } from "../session";
-import {
-  Badge,
-  Notice,
-  Empty,
-  Loading,
-  useLoad,
-  Async,
-  Stat,
-} from "../components";
+import { Badge, Notice, Empty, useLoad, Async, Stat } from "../components";
 import { Fixtures } from "./Tournaments";
 
 export function Dashboard() {
@@ -85,58 +77,75 @@ export function Dashboard() {
 }
 
 export function MyPerformance({ tournament }) {
-  const [data, setData] = useState(undefined),
-    [error, setError] = useState("");
-  useEffect(() => {
-    api(`/tournaments/${tournament}/my-performance`)
-      .then(setData)
-      .catch((e) => setError(e.message));
-  }, [tournament]);
-  if (error) return <Notice error>{error}</Notice>;
-  if (data === undefined) return <Loading />;
-  if (!data)
-    return (
-      <p className="muted">
-        Complete your squad to enter the official leaderboard.
-      </p>
-    );
+  const load = useLoad(`/tournaments/${tournament}/my-performance`, {
+    pollMs: 5000,
+  });
   return (
-    <>
-      <div className="stats">
-        <Stat label="Total points" value={data.points} />
-        <Stat label="Tournament rank" value={`#${data.rank}`} />
-        <Stat label="Matches counted" value={data.matchesCounted} />
-      </div>
-      <details>
-        <summary>Player points breakdown</summary>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Player</th>
-                <th>Base</th>
-                <th>Multiplier</th>
-                <th>Points</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.details.map((p) => (
-                <tr key={p.player}>
-                  <td>
-                    {p.name} <Badge>{p.role}</Badge>
-                  </td>
-                  <td>{p.base}</td>
-                  <td>
-                    ×{p.multiplier}
-                    {p.multiplier === 0 ? " (bench)" : ""}
-                  </td>
-                  <td>{p.points}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
-    </>
+    <Async load={load}>
+      {(data) =>
+        !data ? (
+          <p className="muted">
+            Complete your squad to enter the official leaderboard.
+          </p>
+        ) : (
+          <>
+            <div className="stats">
+              <Stat
+                label={
+                  data.provisional
+                    ? "Total points (includes live)"
+                    : "Total points"
+                }
+                value={data.points}
+              />
+              <Stat label="Tournament rank" value={`#${data.rank}`} />
+              <Stat
+                label="Matches counted"
+                value={`${data.matchesCounted} finalized${data.liveMatchesCounted ? ` + ${data.liveMatchesCounted} live` : ""}`}
+              />
+            </div>
+            {data.provisional && (
+              <Notice>
+                Includes {data.livePoints} provisional points from{" "}
+                {data.liveMatchesCounted} live{" "}
+                {data.liveMatchesCounted === 1 ? "match" : "matches"}. Live
+                points update automatically and are finalized when each match is
+                completed.
+              </Notice>
+            )}
+            <details>
+              <summary>Player points breakdown</summary>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Player</th>
+                      <th>Base</th>
+                      <th>Multiplier</th>
+                      <th>Points</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.details.map((p) => (
+                      <tr key={p.player}>
+                        <td>
+                          {p.name} <Badge>{p.role}</Badge>
+                        </td>
+                        <td>{p.base}</td>
+                        <td>
+                          ×{p.multiplier}
+                          {p.multiplier === 0 ? " (bench)" : ""}
+                        </td>
+                        <td>{p.points}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          </>
+        )
+      }
+    </Async>
   );
 }

@@ -551,6 +551,7 @@ export function Leaderboard({ tournament }) {
     [squadBusy, setSquadBusy] = useState(false);
   const l = useLoad(
     `/tournaments/${tournament}/leaderboard?page=${page}&limit=50&name=${encodeURIComponent(search)}`,
+    { pollMs: 5000 },
   );
   const disclosure = useLoad(`/tournaments/${tournament}/squad-disclosure`, {
     pollMs: 5000,
@@ -578,7 +579,11 @@ export function Leaderboard({ tournament }) {
     <>
       <div className="section-heading">
         <h2>The campus standings</h2>
-        <span>Finalized matches only</span>
+        <span>
+          {l.data?.some((row) => row.provisional)
+            ? "Provisional — includes live matches"
+            : "Finalized matches only"}
+        </span>
       </div>
       <Field
         label="Search managers by name"
@@ -681,9 +686,15 @@ export function Leaderboard({ tournament }) {
                             r.name
                           )}
                         </td>
-                        <td>{r.matchesCounted}</td>
+                        <td>
+                          {r.matchesCounted} finalized
+                          {r.liveMatchesCounted
+                            ? ` + ${r.liveMatchesCounted} live`
+                            : ""}
+                        </td>
                         <td>
                           <b>{r.points}</b>
+                          {r.provisional && <small> provisional</small>}
                         </td>
                       </tr>
                     ))}

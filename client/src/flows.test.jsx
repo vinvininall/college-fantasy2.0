@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  act,
   cleanup,
   fireEvent,
 } from "@testing-library/react";
@@ -18,6 +19,8 @@ import { SquadBuilder } from "./pages/Squad";
 import { RosterAdmin } from "./pages/Admin";
 import { PlayerPage } from "./pages/Tournaments";
 import { MatchPage } from "./pages/Match";
+import { MyPerformance } from "./pages/Dashboard";
+import { Async, useLoad } from "./components";
 import { api, rupees } from "./api";
 vi.mock("./api", async () => {
   const actual = await vi.importActual("./api");
@@ -187,6 +190,71 @@ it("labels live match fantasy points as provisional", async () => {
   ).toBeTruthy();
   expect(screen.getByText("Aarav")).toBeTruthy();
   expect(screen.getByText("12")).toBeTruthy();
+  await waitFor(() => {
+    expect(screen.getByText("2 : 1")).toBeTruthy();
+    expect(screen.getByText("Falcons")).toBeTruthy();
+    expect(screen.getByText("Wolves")).toBeTruthy();
+  });
+  expect(
+    api.mock.calls.filter(([path]) => path === "/matches/m1"),
+  ).toHaveLength(1);
+});
+it("keeps loaded match data visible while an event refresh is in progress", async () => {
+  let finishRefresh;
+  api
+    .mockResolvedValueOnce({ status: "live", score: "1 : 0" })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRefresh = resolve;
+        }),
+    );
+  function RefreshProbe() {
+    const load = useLoad("/matches/m1");
+    return (
+      <>
+        <Async load={load}>{(match) => <p>{match.score}</p>}</Async>
+        <button onClick={load.reload}>Record event</button>
+      </>
+    );
+  }
+  const user = userEvent.setup();
+  render(<RefreshProbe />);
+  expect(await screen.findByText("1 : 0")).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Record event" }));
+  expect(screen.getByText("1 : 0")).toBeTruthy();
+  expect(screen.queryByText("Loading the field…")).toBeNull();
+  finishRefresh({ status: "live", score: "2 : 0" });
+  expect(await screen.findByText("2 : 0")).toBeTruthy();
+});
+it("does not let an older provisional-points request overwrite a newer event refresh", async () => {
+  let finishOldRequest;
+  api
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOldRequest = resolve;
+        }),
+    )
+    .mockResolvedValueOnce({ points: 15 });
+  function PointsProbe() {
+    const load = useLoad("/matches/m1/live-performance", { pollMs: 5000 });
+    return (
+      <>
+        <Async load={load}>{(result) => <p>{result.points}</p>}</Async>
+        <button onClick={load.reload}>Refresh after event</button>
+      </>
+    );
+  }
+  const user = userEvent.setup();
+  render(<PointsProbe />);
+  await user.click(
+    await screen.findByRole("button", { name: "Refresh after event" }),
+  );
+  expect(await screen.findByText("15")).toBeTruthy();
+  finishOldRequest({ points: 0 });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(screen.getByText("15")).toBeTruthy();
 });
 it("submits registration and rejects mismatched confirmation", async () => {
   const login = vi.fn();
@@ -345,6 +413,81 @@ it("leaderboard displays final points and shared ranks", async () => {
   );
   expect(await screen.findByText("Aarav")).toBeTruthy();
   expect(screen.getAllByText("14.5")).toHaveLength(2);
+});
+it("refreshes provisional manager scores while a match is live", async () => {
+  let leaderboardRequests = 0;
+  api.mockImplementation((path) => {
+    if (path.endsWith("/squad-disclosure"))
+      return Promise.resolve({ allowed: false });
+    if (path.includes("/leaderboard")) {
+      leaderboardRequests++;
+      return Promise.resolve([
+        {
+          user: "u1",
+          name: "Aarav",
+          points: leaderboardRequests === 1 ? 10 : 18,
+          rank: 1,
+          matchesCounted: 1,
+          liveMatchesCounted: 1,
+          provisional: true,
+        },
+      ]);
+    }
+    return Promise.resolve([]);
+  });
+  vi.useFakeTimers();
+  try {
+    render(
+      <MemoryRouter>
+        <Leaderboard tournament="t1" />
+      </MemoryRouter>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByText("10")).toBeTruthy();
+    expect(
+      screen.getByText(/Provisional — includes live matches/),
+    ).toBeTruthy();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(screen.getByText("18")).toBeTruthy();
+    expect(leaderboardRequests).toBeGreaterThanOrEqual(2);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it("shows a manager's live points as provisional in their personal points view", async () => {
+  api.mockResolvedValue({
+    points: 18,
+    finalizedPoints: 10,
+    livePoints: 8,
+    provisional: true,
+    liveMatchesCounted: 1,
+    matchesCounted: 2,
+    rank: 1,
+    details: [
+      {
+        player: "p1",
+        name: "Aarav Demo",
+        base: 9,
+        multiplier: 2,
+        points: 18,
+        role: "captain",
+      },
+    ],
+  });
+  render(<MyPerformance tournament="t1" />);
+  expect(await screen.findByText("Total points (includes live)")).toBeTruthy();
+  expect(screen.getAllByText("18")).toHaveLength(2);
+  expect(
+    screen.getByText(/Includes 8 provisional points from 1 live match/),
+  ).toBeTruthy();
+  expect(screen.getByText("2 finalized + 1 live")).toBeTruthy();
+  expect(screen.getByText("Aarav Demo")).toBeTruthy();
+  expect(api).toHaveBeenCalledWith("/tournaments/t1/my-performance");
 });
 it("searches managers and displays a disclosed squad with roles and points", async () => {
   api.mockImplementation((path) =>

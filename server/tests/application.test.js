@@ -962,13 +962,30 @@ it("keeps live fantasy points provisional, updates live scores, and finalizes on
   ).body.data;
   expect(provisional.provisional).toBe(true);
   expect(provisional.rows[0].points).toBe(19.5);
+  const liveBoard = (
+    await call("get", `/tournaments/${t._id}/leaderboard`, userToken)
+  ).body.data;
+  expect(liveBoard[0]).toMatchObject({
+    points: 19.5,
+    provisional: true,
+    liveMatchesCounted: 1,
+  });
   expect(
     (await call("get", `/matches/${match._id}`, userToken)).body.data.awayScore,
   ).toBe(1);
+  const managerPoints = (
+    await call("get", `/tournaments/${t._id}/my-performance`, userToken)
+  ).body.data;
+  expect(managerPoints).toMatchObject({
+    points: 19.5,
+    finalizedPoints: 0,
+    livePoints: 19.5,
+    provisional: true,
+    liveMatchesCounted: 1,
+  });
   expect(
-    (await call("get", `/tournaments/${t._id}/my-performance`, userToken)).body
-      .data.points,
-  ).toBe(0);
+    managerPoints.details.find((row) => row.player === String(ps[4]._id)),
+  ).toMatchObject({ base: 5, points: 10, role: "captain" });
   expect(
     (
       await call("post", eventPath, adminToken, {
@@ -994,6 +1011,14 @@ it("keeps live fantasy points provisional, updates live scores, and finalizes on
   ).body.data;
   expect(corrected.provisional).toBe(true);
   expect(corrected.rows[0].points).toBe(19);
+  expect(
+    (await call("get", `/tournaments/${t._id}/leaderboard`, userToken)).body
+      .data[0].points,
+  ).toBe(19);
+  expect(
+    (await call("get", `/tournaments/${t._id}/my-performance`, userToken)).body
+      .data,
+  ).toMatchObject({ points: 19, livePoints: 19, provisional: true });
 
   expect(
     (
@@ -1009,6 +1034,10 @@ it("keeps live fantasy points provisional, updates live scores, and finalizes on
   ).body.data;
   expect(finalized.provisional).toBe(false);
   expect(finalized.rows[0].points).toBe(19);
+  expect(
+    (await call("get", `/tournaments/${t._id}/leaderboard`, userToken)).body
+      .data[0],
+  ).toMatchObject({ points: 19, provisional: false, liveMatchesCounted: 0 });
   expect(
     (await call("get", `/tournaments/${t._id}/my-performance`, userToken)).body
       .data.points,

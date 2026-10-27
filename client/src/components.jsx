@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, {
+  useState,
+  useEffect,
+  useContext,
+  useCallback,
+  useRef,
+} from "react";
 import { Navigate } from "react-router-dom";
 import { api } from "./api";
 import { Session } from "./session";
@@ -52,41 +58,66 @@ export function useLoad(path, { all = false, pollMs = 0 } = {}) {
   const [data, setData] = useState(null),
     [error, setError] = useState(""),
     [revision, setRevision] = useState(0);
+  const requestKey = `${path}:${all}`;
+  const previousRequestKey = useRef(requestKey);
+  const latestRequest = useRef(0);
+  const fetchData = useCallback(async () => {
+    if (!all) return api(path);
+    const rows = [];
+    let page = 1;
+    while (true) {
+      const batch = await api(
+        `${path}${path.includes("?") ? "&" : "?"}page=${page}&limit=100`,
+      );
+      rows.push(...batch);
+      if (batch.length < 100) break;
+      page++;
+    }
+    return rows;
+  }, [path, all]);
   useEffect(() => {
     let alive = true;
-    let timer;
-    setData(null);
-    setError("");
-    async function fetchData() {
-      if (!all) return api(path);
-      const rows = [];
-      let page = 1;
-      while (alive) {
-        const batch = await api(
-          `${path}${path.includes("?") ? "&" : "?"}page=${page}&limit=100`,
-        );
-        rows.push(...batch);
-        if (batch.length < 100) break;
-        page++;
-      }
-      return rows;
+    if (previousRequestKey.current !== requestKey) {
+      previousRequestKey.current = requestKey;
+      setData(null);
     }
-    async function load() {
+    setError("");
+    const request = ++latestRequest.current;
+    fetchData()
+      .then((result) => {
+        if (alive && request === latestRequest.current) setData(result);
+      })
+      .catch((e) => {
+        if (alive && request === latestRequest.current) setError(e.message);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [fetchData, requestKey, revision]);
+  useEffect(() => {
+    if (!pollMs) return;
+    let alive = true;
+    let timer;
+    async function poll() {
+      const request = ++latestRequest.current;
       try {
         const result = await fetchData();
-        if (alive) setData(result);
+        if (alive && request === latestRequest.current) {
+          setData(result);
+          setError("");
+        }
       } catch (e) {
-        if (alive) setError(e.message);
+        if (alive && request === latestRequest.current) setError(e.message);
       } finally {
-        if (alive && pollMs > 0) timer = setTimeout(load, pollMs);
+        if (alive) timer = setTimeout(poll, pollMs);
       }
     }
-    load();
+    timer = setTimeout(poll, pollMs);
     return () => {
       alive = false;
       clearTimeout(timer);
     };
-  }, [path, revision, all, pollMs]);
+  }, [fetchData, pollMs]);
   return { data, error, reload: () => setRevision((n) => n + 1) };
 }
 
