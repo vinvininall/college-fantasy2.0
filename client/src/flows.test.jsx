@@ -58,6 +58,20 @@ beforeEach(() => {
   window.history.replaceState({}, "", "/");
 });
 afterEach(cleanup);
+it("toggles and remembers the selected color theme", async () => {
+  api.mockResolvedValue([]);
+  const user = userEvent.setup();
+  render(<App />);
+  const toggle = screen.getByRole("button", { name: "Switch to dark mode" });
+  await user.click(toggle);
+  expect(document.documentElement.dataset.theme).toBe("dark");
+  expect(localStorage.getItem("sfl-theme")).toBe("dark");
+  await user.click(
+    screen.getByRole("button", { name: "Switch to light mode" }),
+  );
+  expect(document.documentElement.dataset.theme).toBe("light");
+  expect(localStorage.getItem("sfl-theme")).toBe("light");
+});
 it("submits registration and rejects mismatched confirmation", async () => {
   const login = vi.fn();
   api.mockResolvedValue({ user: { name: "Aarav" }, token: "token" });

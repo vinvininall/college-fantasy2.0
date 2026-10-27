@@ -18,7 +18,14 @@ import { MatchPage } from "./pages/Match";
 
 export function App() {
   const [user, setUser] = useState(null),
-    [loading, setLoading] = useState(true);
+    [loading, setLoading] = useState(true),
+    [darkMode, setDarkMode] = useState(
+      () => localStorage.getItem("sfl-theme") === "dark",
+    );
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkMode ? "dark" : "light";
+    localStorage.setItem("sfl-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
   useEffect(() => {
     if (localStorage.getItem("sfl-token"))
       api("/auth/me")
@@ -54,6 +61,15 @@ export function App() {
             )}
           </nav>
           <div className="account">
+            <button
+              className="quiet theme-toggle"
+              type="button"
+              aria-label={`Switch to ${darkMode ? "light" : "dark"} mode`}
+              aria-pressed={darkMode}
+              onClick={() => setDarkMode((enabled) => !enabled)}
+            >
+              {darkMode ? "☀ Light" : "☾ Dark"}
+            </button>
             {user ? (
               <>
                 <span>{user.name}</span>

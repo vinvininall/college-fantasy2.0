@@ -9,12 +9,24 @@
   --lime: #d0ef76;
   --muted: #6e776f;
   --line: #dfe4da;
+  --surface: #ffffff;
+  --surface-alt: #f8f9f4;
+  --text: #16271d;
+  --button-text: #ffffff;
 }
 * {
   box-sizing: border-box;
 }
+html {
+  color-scheme: light;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+}
 body {
   margin: 0;
+  color: var(--text);
+  background: var(--surface-alt);
 }
 a {
   color: inherit;
@@ -36,13 +48,16 @@ button,
   border-radius: 5px;
   padding: 14px 22px;
   background: var(--green);
-  color: #fff;
+  color: var(--button-text);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition:
     background 0.15s,
     transform 0.15s;
+}
+.theme-toggle {
+  white-space: nowrap;
 }
 button:hover,
 .button:hover {
@@ -1252,6 +1267,149 @@ summary {
 }
 .timeline .badge {
   font-size: 9px;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  color: var(--text);
+  background: var(--surface-alt);
+  --green: #b6d990;
+  --lime: #d0ef76;
+  --muted: #a4b0a5;
+  --line: #37463b;
+  --surface: #1d2821;
+  --surface-alt: #121914;
+  --text: #e8eee8;
+  --button-text: #172019;
+}
+:root[data-theme="dark"] header,
+:root[data-theme="dark"] footer {
+  background: var(--surface-alt);
+}
+:root[data-theme="dark"] nav a,
+:root[data-theme="dark"] .hero-copy,
+:root[data-theme="dark"] .panel p,
+:root[data-theme="dark"] .field > span,
+:root[data-theme="dark"] .tournament-hero p,
+:root[data-theme="dark"] .tabs button,
+:root[data-theme="dark"] .fixture h3 span,
+:root[data-theme="dark"] .fixture p {
+  color: var(--muted);
+}
+:root[data-theme="dark"] .tournament-card,
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .stats,
+:root[data-theme="dark"] .player-card,
+:root[data-theme="dark"] .fixture,
+:root[data-theme="dark"] .table-wrap {
+  background: var(--surface);
+}
+:root[data-theme="dark"] .field input,
+:root[data-theme="dark"] .field select,
+:root[data-theme="dark"] .field textarea {
+  color: var(--text);
+  background: #151e18;
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .how,
+:root[data-theme="dark"] .tournament-hero,
+:root[data-theme="dark"] .summary,
+:root[data-theme="dark"] .formation-summary {
+  background: #222f25;
+}
+:root[data-theme="dark"] .empty {
+  color: var(--muted);
+  background: var(--surface);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] th {
+  color: #b8c6b5;
+  background: #27342b;
+}
+:root[data-theme="dark"] td,
+:root[data-theme="dark"] .score-rules > div {
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .secondary {
+  color: var(--green);
+  border-color: #536454;
+}
+:root[data-theme="dark"] .secondary:hover,
+:root[data-theme="dark"] .quiet:hover,
+:root[data-theme="dark"] .icon-button:hover {
+  background: #29372d;
+}
+:root[data-theme="dark"] .notice {
+  color: #c6e1ad;
+  background: #263522;
+  border-color: #536a45;
+}
+:root[data-theme="dark"] .notice.error {
+  color: #ffc4b7;
+  background: #3a2521;
+  border-color: #795044;
+}
+:root[data-theme="dark"] .badge {
+  color: #d1e4c3;
+  background: #2b382d;
+  border-color: #435342;
+}
+:root[data-theme="dark"] .badge.live,
+:root[data-theme="dark"] .badge.active {
+  color: #d9efbe;
+  background: #33452c;
+}
+:root[data-theme="dark"] .badge.draft,
+:root[data-theme="dark"] .badge.cancelled {
+  color: #c1c5bd;
+  background: #30332f;
+}
+:root[data-theme="dark"] .badge.completed {
+  color: #c6d6ef;
+  background: #29374a;
+}
+:root[data-theme="dark"] .badge.gk {
+  color: #f0dda0;
+  background: #463c26;
+}
+:root[data-theme="dark"] .badge.def {
+  color: #b8dec5;
+  background: #293c32;
+}
+:root[data-theme="dark"] .badge.mid {
+  color: #c2dcec;
+  background: #293b47;
+}
+:root[data-theme="dark"] .badge.fwd {
+  color: #efc3ae;
+  background: #49342d;
+}
+:root[data-theme="dark"] .danger {
+  color: #ffb6a7;
+  background: #402823;
+  border-color: #755044;
+}
+:root[data-theme="dark"] .remove {
+  color: #e4efda;
+  background: #354333;
+  border-color: #354333;
+}
+:root[data-theme="dark"] .light {
+  color: #26331e;
+}
+:root[data-theme="dark"] .match-score {
+  background: #263529;
+}
+:root[data-theme="dark"] .hero-art {
+  filter: brightness(0.82);
+}
+:root[data-theme="dark"] .card-art {
+  filter: brightness(0.78);
+}
+@media (max-width: 650px) {
+  .theme-toggle {
+    padding: 8px;
+    font-size: 11px;
+  }
 }
 @media (min-width: 1600px) {
   header,
