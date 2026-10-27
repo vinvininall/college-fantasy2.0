@@ -26,6 +26,10 @@ export function registerEventsRoutes(app) {
         "redCard",
         "penaltySave",
         "cleanSheet",
+        "goalkeeperSave",
+        "shotOnTarget",
+        "penaltyMissed",
+        "playerOfTheMatch",
       ]),
       minute: z.number().int().min(0).max(150),
       relatedGoal: id.nullable().optional(),
@@ -47,6 +51,18 @@ export function registerEventsRoutes(app) {
     );
     if (v.type === "penaltySave")
       check(p.position === "GK", "Penalty save requires goalkeeper");
+    if (v.type === "goalkeeperSave")
+      check(p.position === "GK", "Goalkeeper save requires goalkeeper");
+    if (v.type === "playerOfTheMatch")
+      check(
+        !(await MatchEvent.exists({
+          match: m._id,
+          type: "playerOfTheMatch",
+          ...(exclude ? { _id: { $ne: exclude } } : {}),
+        })),
+        "Player of the match already awarded",
+        409,
+      );
     if (v.type === "cleanSheet") {
       check(
         ["GK", "DEF"].includes(p.position),

@@ -197,11 +197,14 @@ The initial default points are configurable per tournament:
 | Assist                            |              3 |
 | Clean-sheet credit                |              4 |
 | Penalty save                      |              5 |
+| Goalkeeper save / shot on target  |          1 / 1 |
+| Penalty missed                    |             -2 |
+| Player of the match               |              5 |
 | Yellow / red card                 |        -1 / -3 |
 | Own goal                          |             -2 |
 | Captain / vice-captain multiplier |        2 / 1.5 |
 
-Only completed matches count on official leaderboards. There are no fake live updates or provisional fantasy totals. The `live` badge is manually controlled.
+Only completed matches count on official leaderboards. Admins control when a match is marked live.
 
 `scoreEvents()` aggregates each player's contributions using their locked position and the tournament's scoring rules. `scoreSquad()` includes only starters and applies exactly one multiplier per player. Half and quarter points are exactly representable with these configured half-step values. Leaderboards use descending points, deterministic user-ID ordering within ties, and competition ranks such as `1, 1, 3`. Incomplete squads are excluded.
 
@@ -209,9 +212,11 @@ Points are calculated on demand using batched database reads; no client-submitte
 
 Goals credit the scorer's team; own goals credit its opponent. Before a match can be finalized, its entered score must equal its recorded goal/own-goal tally. After event corrections, finalized match endpoints derive the scoreboard again from events. Stored Match scores retain the last entered result; **the read API's derived finalized score is authoritative after corrections**. This avoids a cross-document scoreboard-cache update on standalone MongoDB.
 
-Assists reference one recorded goal, at the same minute, by a different player on the same team. Only one assist is credited per goal. Remove its assist before editing/deleting that goal. Identical player/type/minute events are rejected in both the API and a unique index. Clean-sheet credits are explicit admin events, restricted to GK/DEF, once per match/player, and cannot conflict with conceded goal events. Penalty saves require GK.
+Assists reference one recorded goal, at the same minute, by a different player on the same team. Only one assist is credited per goal. Remove its assist before editing/deleting that goal. Identical player/type/minute events are rejected in both the API and a unique index. Clean-sheet credits are explicit admin events, restricted to GK/DEF, once per match/player, and cannot conflict with conceded goal events. Penalty saves and goalkeeper saves require GK. Shot-on-target, missed-penalty, and player-of-the-match awards are also configurable scoring events; only one player-of-the-match award is allowed per match.
 
-Actual substitutions, minutes played, automatic clean-sheet duration qualification, penalties converted/missed, transfer windows, per-match lineup changes and automatic bench substitutions are **not implemented**. Administrators must verify participation/clean-sheet eligibility themselves. The same frozen fantasy lineup scores throughout a tournament. Two distinct same-type contributions by one player in the same integer minute require correcting the time representation before entry; second-level event timing is a future improvement.
+Admins can record, correct, and remove events while a match is live. Match centres poll for score, event, and provisional fantasy-team-point updates every five seconds without a manual refresh. Live points are clearly provisional and do not enter official standings; completing a match recalculates and includes its points in tournament standings.
+
+Actual substitutions, minutes played, automatic clean-sheet duration qualification, penalty conversion events, transfer windows, per-match lineup changes and automatic bench substitutions are **not implemented**. Administrators must verify participation/clean-sheet eligibility themselves. The same frozen fantasy lineup scores throughout a tournament. Two distinct same-type contributions by one player in the same integer minute require correcting the time representation before entry; second-level event timing is a future improvement.
 
 ## REST API
 
@@ -242,6 +247,7 @@ List endpoints accept `page` (default 1) and `limit` (default 50, maximum 100), 
 | PUT              | `/matches/:matchId/result`                                 | Admin                                 |
 | GET, POST        | `/matches/:matchId/events`                                 | Read public/admin drafts; write admin |
 | PUT, DELETE      | `/match-events/:eventId`                                   | Admin                                 |
+| GET              | `/matches/:matchId/live-performance`                       | Public live provisional/final points  |
 | GET              | `/tournaments/:tournamentId/leaderboard`                   | Public/admin drafts                   |
 | GET              | `/tournaments/:tournamentId/my-performance`                | Current signed-in user                |
 | GET              | `/tournaments/:tournamentId/players/:playerId/performance` | Public/admin drafts                   |

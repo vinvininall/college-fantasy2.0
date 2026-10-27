@@ -5,7 +5,27 @@ import {
   Player,
   Team,
 } from "../models/index.js";
+import { scoringDefaults } from "./rules.js";
+
+export function scoringRules(rules = {}) {
+  const resolved = Object.fromEntries(
+    Object.keys(scoringDefaults)
+      .filter((key) => key !== "goal")
+      .map((key) => [key, rules[key] ?? scoringDefaults[key]]),
+  );
+  return {
+    ...resolved,
+    goal: Object.fromEntries(
+      Object.keys(scoringDefaults.goal).map((position) => [
+        position,
+        rules.goal?.[position] ?? scoringDefaults.goal[position],
+      ]),
+    ),
+  };
+}
+
 export function scoreEvents(events, players, rules) {
+  rules = scoringRules(rules);
   const result = {};
   const byId = new Map(players.map((p) => [String(p._id), p]));
   for (const e of events) {
@@ -30,7 +50,54 @@ export function scoreEvents(events, players, rules) {
   }
   return result;
 }
+export async function matchPerformance(match, tournament) {
+  const [events, players, squads] = await Promise.all([
+    MatchEvent.find({ match: match._id }).lean(),
+    Player.find({
+      team: { $in: [match.homeTeam, match.awayTeam] },
+    }).lean(),
+    FantasySquad.find({ tournament: tournament._id, complete: true })
+      .populate("user", "name")
+      .lean(),
+  ]);
+  const breakdown = scoreEvents(events, players, tournament.scoring);
+  const playerById = new Map(
+    players.map((player) => [String(player._id), player]),
+  );
+  const rows = squads.map((squad) => {
+    const details = scoreSquad(
+      squad,
+      breakdown,
+      scoringRules(tournament.scoring),
+    )
+      .map((row) => ({
+        ...row,
+        name: playerById.get(row.player)?.name,
+      }))
+      .filter((row) => row.base !== 0);
+    return {
+      user: String(squad.user._id),
+      name: squad.user.name,
+      points: details.reduce((sum, row) => sum + row.points, 0),
+      details,
+    };
+  });
+  rows.sort(
+    (a, b) =>
+      b.points - a.points || String(a.user).localeCompare(String(b.user)),
+  );
+  rows.forEach(
+    (row, index) =>
+      (row.rank =
+        index && rows[index - 1].points === row.points
+          ? rows[index - 1].rank
+          : index + 1),
+  );
+  return rows;
+}
+
 export function scoreSquad(squad, breakdown, rules) {
+  rules = scoringRules(rules);
   return squad.players.map((id) => {
     id = String(id);
     const starter = squad.starters.some((s) => String(s) === id);

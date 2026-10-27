@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, date } from "../api";
 import { Session } from "../session";
@@ -7,15 +7,25 @@ import { Field, Badge, Notice, Empty, useLoad, Async } from "../components";
 export function MatchPage() {
   const { id } = useParams();
   const { user } = useContext(Session);
-  const match = useLoad(`/matches/${id}`),
-    events = useLoad(`/matches/${id}/events`, { all: true });
+  const [pollLive, setPollLive] = useState(false);
+  const match = useLoad(`/matches/${id}`, { pollMs: pollLive ? 5000 : 0 });
+  useEffect(() => {
+    setPollLive(match.data?.status === "live");
+  }, [match.data?.status]);
+  const events = useLoad(`/matches/${id}/events`, {
+      all: true,
+      pollMs: pollLive ? 5000 : 0,
+    }),
+    points = useLoad(`/matches/${id}/live-performance`, {
+      pollMs: pollLive ? 5000 : 0,
+    });
   return (
     <section className="section">
       <Async load={match}>
         {(m) => (
           <>
             <p className="eyebrow">MATCH CENTRE</p>
-            <div className="match-score">
+            <div className="match-score" aria-live="polite">
               <h1>{m.homeTeam.name}</h1>
               <div>
                 <Badge>{m.status}</Badge>
@@ -30,8 +40,8 @@ export function MatchPage() {
             </p>
             {m.status === "live" && (
               <Notice>
-                Live status is managed by the organizer. Points become official
-                when this match is completed.
+                Live scores and event updates are refreshed automatically.
+                Fantasy points are provisional until the match is completed.
               </Notice>
             )}
             {user?.role === "admin" && (
@@ -40,6 +50,7 @@ export function MatchPage() {
                 reload={() => {
                   match.reload();
                   events.reload();
+                  points.reload();
                 }}
                 events={events.data || []}
               />
@@ -49,14 +60,19 @@ export function MatchPage() {
               <Async load={events}>
                 {(es) =>
                   es.length ? (
-                    <ol className="timeline">
+                    <ol className="timeline" aria-live="polite">
                       {es.map((e) => (
                         <li key={e._id}>
                           <b>{e.minute}′</b>
                           <div>
                             <Badge>{e.type.replace(/([A-Z])/g, " $1")}</Badge>
                             <p>
-                              <Link to={`/players/${e.player._id}`}>
+                              <Link
+                                to={`/players/${e.player._id}`}
+                                state={{
+                                  returnTo: window.location.pathname,
+                                }}
+                              >
                                 {e.player.name}
                               </Link>
                             </p>
@@ -70,6 +86,61 @@ export function MatchPage() {
                 }
               </Async>
             </div>
+            {["live", "completed"].includes(m.status) && (
+              <div className="panel live-points">
+                <h2>
+                  {m.status === "live"
+                    ? "Provisional fantasy-team points"
+                    : "Final fantasy-team points"}
+                </h2>
+                <p>
+                  {m.status === "live"
+                    ? "Live points may change as events are recorded or corrected."
+                    : "Match points are finalized and included in tournament standings."}
+                </p>
+                <Async load={points}>
+                  {(result) =>
+                    result.rows.length ? (
+                      <div className="table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Rank</th>
+                              <th>Manager</th>
+                              <th>
+                                {result.provisional
+                                  ? "Provisional points"
+                                  : "Final points"}
+                              </th>
+                              <th>Scoring players</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {result.rows.map((row) => (
+                              <tr key={row.user}>
+                                <td>{row.rank}</td>
+                                <td>{row.name}</td>
+                                <td>{row.points}</td>
+                                <td>
+                                  {row.details
+                                    .map(
+                                      (detail) =>
+                                        `${detail.name} (${detail.points})`,
+                                    )
+                                    .join(", ") || "—"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <Empty>No completed fantasy squads yet.</Empty>
+                    )
+                  }
+                </Async>
+              </div>
+            )}
           </>
         )}
       </Async>
@@ -88,6 +159,14 @@ export function MatchAdmin({ match: m, reload, events }) {
     awayScore: m.awayScore,
     status: m.status === "scheduled" ? "live" : m.status,
   });
+  useEffect(() => {
+    setV((current) => ({
+      ...current,
+      homeScore: m.homeScore,
+      awayScore: m.awayScore,
+      status: m.status === "scheduled" ? "live" : m.status,
+    }));
+  }, [m.homeScore, m.awayScore, m.status]);
   const [fixture, setFixture] = useState({
     homeTeam: m.homeTeam._id,
     awayTeam: m.awayTeam._id,
@@ -232,15 +311,21 @@ export function MatchAdmin({ match: m, reload, events }) {
                 }
               >
                 {[
-                  "goal",
-                  "assist",
-                  "ownGoal",
-                  "yellowCard",
-                  "redCard",
-                  "penaltySave",
-                  "cleanSheet",
-                ].map((s) => (
-                  <option key={s}>{s}</option>
+                  ["goal", "Goal"],
+                  ["assist", "Assist"],
+                  ["ownGoal", "Own goal"],
+                  ["yellowCard", "Yellow card"],
+                  ["redCard", "Red card"],
+                  ["penaltySave", "Penalty saved"],
+                  ["goalkeeperSave", "Goalkeeper save"],
+                  ["shotOnTarget", "Shot on target"],
+                  ["penaltyMissed", "Penalty missed"],
+                  ["playerOfTheMatch", "Player of the match"],
+                  ["cleanSheet", "Clean sheet"],
+                ].map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
                 ))}
               </select>
             </Field>

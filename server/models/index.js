@@ -62,6 +62,10 @@ const tournament = new Schema(
       assist: Number,
       cleanSheet: Number,
       penaltySave: Number,
+      goalkeeperSave: { type: Number, default: 1 },
+      shotOnTarget: { type: Number, default: 1 },
+      penaltyMissed: { type: Number, default: -2 },
+      playerOfTheMatch: { type: Number, default: 5 },
       yellowCard: Number,
       redCard: Number,
       ownGoal: Number,
@@ -161,6 +165,10 @@ const event = new Schema(
         "redCard",
         "penaltySave",
         "cleanSheet",
+        "goalkeeperSave",
+        "shotOnTarget",
+        "penaltyMissed",
+        "playerOfTheMatch",
       ],
       required: true,
     },
@@ -181,6 +189,13 @@ event.index(
   {
     unique: true,
     partialFilterExpression: { relatedGoal: { $type: "objectId" } },
+  },
+);
+event.index(
+  { match: 1, type: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { type: "playerOfTheMatch" },
   },
 );
 export const User = mongoose.model("User", user);

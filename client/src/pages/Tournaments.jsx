@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { rupees, date } from "../api";
 
 import { Field, Badge, Empty, useLoad, Async, Stat } from "../components";
@@ -189,6 +189,7 @@ export function TournamentPage() {
 }
 
 export function PlayerBrowser({ tournament, selected = [], onToggle }) {
+  const location = useLocation();
   const [search, setSearch] = useState(""),
     [position, setPosition] = useState(""),
     [team, setTeam] = useState(""),
@@ -253,7 +254,14 @@ export function PlayerBrowser({ tournament, selected = [], onToggle }) {
                     <div>
                       <Badge>{p.position}</Badge>
                       <h3>
-                        <Link to={`/players/${p._id}`}>{p.name}</Link>
+                        <Link
+                          to={`/players/${p._id}`}
+                          state={{
+                            returnTo: location.pathname + location.search,
+                          }}
+                        >
+                          {p.name}
+                        </Link>
                       </h3>
                       <small>{p.team.name}</small>
                       <strong>{rupees(p.fantasyPrice)}</strong>
@@ -343,6 +351,7 @@ export function TeamPage() {
                       className="panel"
                       key={p._id}
                       to={`/players/${p._id}`}
+                      state={{ returnTo: `/teams/${id}` }}
                     >
                       <Badge>{p.position}</Badge>
                       <h3>{p.name}</h3>
@@ -362,7 +371,22 @@ export function TeamPage() {
 
 export function PlayerPage() {
   const { id } = useParams();
+  const navigate = useNavigate(),
+    location = useLocation();
   const load = useLoad(`/players/${id}`);
+  useEffect(() => {
+    if (load.error === "Resource not found") {
+      const returnTo = location.state?.returnTo;
+      navigate(
+        typeof returnTo === "string" &&
+          returnTo.startsWith("/") &&
+          !returnTo.startsWith("//")
+          ? returnTo
+          : "/tournaments",
+        { replace: true },
+      );
+    }
+  }, [load.error, location.state, navigate]);
   return (
     <section className="section">
       <Async load={load}>

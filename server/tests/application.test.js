@@ -863,6 +863,156 @@ describe("Scoring service", () => {
       )[0].points,
     ).toBe(10.5);
   });
+  it("scores goalkeeper saves, shots on target, missed penalties, and player of the match", () => {
+    const rules = {
+      ...scoringDefaults,
+      goalkeeperSave: 2,
+      shotOnTarget: 1.5,
+      penaltyMissed: -4,
+      playerOfTheMatch: 6,
+    };
+    const players = [
+      { _id: "keeper", name: "Keeper", position: "GK" },
+      { _id: "forward", name: "Forward", position: "FWD" },
+    ];
+    const breakdown = scoreEvents(
+      [
+        { player: "keeper", type: "goalkeeperSave", minute: 5 },
+        { player: "forward", type: "shotOnTarget", minute: 8 },
+        { player: "forward", type: "penaltyMissed", minute: 10 },
+        { player: "forward", type: "playerOfTheMatch", minute: 90 },
+      ],
+      players,
+      rules,
+    );
+    expect(breakdown.keeper.points).toBe(2);
+    expect(breakdown.forward.points).toBe(3.5);
+  });
+  it("uses default points for new event types on legacy tournament scoring rules", () => {
+    const legacyRules = {
+      goal: scoringDefaults.goal,
+      assist: scoringDefaults.assist,
+      cleanSheet: scoringDefaults.cleanSheet,
+      penaltySave: scoringDefaults.penaltySave,
+      yellowCard: scoringDefaults.yellowCard,
+      redCard: scoringDefaults.redCard,
+      ownGoal: scoringDefaults.ownGoal,
+      captain: scoringDefaults.captain,
+      viceCaptain: scoringDefaults.viceCaptain,
+    };
+    const result = scoreEvents(
+      [
+        { player: "keeper", type: "goalkeeperSave" },
+        { player: "forward", type: "penaltyMissed" },
+      ],
+      [
+        { _id: "keeper", position: "GK" },
+        { _id: "forward", position: "FWD" },
+      ],
+      legacyRules,
+    );
+    expect(result.keeper.points).toBe(scoringDefaults.goalkeeperSave);
+    expect(result.forward.points).toBe(scoringDefaults.penaltyMissed);
+  });
+});
+it("keeps live fantasy points provisional, updates live scores, and finalizes on completion", async () => {
+  const t = await tournament("upcoming", {
+    scoring: {
+      ...scoringDefaults,
+      goalkeeperSave: 2,
+      shotOnTarget: 1.5,
+      penaltyMissed: -4,
+      playerOfTheMatch: 6,
+    },
+  });
+  const { a, b, ps } = await roster(t);
+  await call("put", `/tournaments/${t._id}/my-squad`, userToken, squadBody(ps));
+  await call("patch", `/tournaments/${t._id}/status`, adminToken, {
+    status: "active",
+  });
+  const match = await Match.create({
+    tournament: t._id,
+    homeTeam: a._id,
+    awayTeam: b._id,
+    scheduledAt: new Date(),
+    status: "live",
+    homeScore: 0,
+    awayScore: 0,
+  });
+  const eventPath = `/matches/${match._id}/events`;
+  for (const [player, type, minute] of [
+    [ps[0], "goalkeeperSave", 4],
+    [ps[1], "shotOnTarget", 12],
+    [ps[2], "penaltyMissed", 30],
+    [ps[4], "playerOfTheMatch", 90],
+    [ps[4], "goal", 55],
+  ]) {
+    expect(
+      (
+        await call("post", eventPath, adminToken, {
+          player: String(player._id),
+          type,
+          minute,
+        })
+      ).status,
+    ).toBe(201);
+  }
+  const provisional = (
+    await call("get", `/matches/${match._id}/live-performance`, userToken)
+  ).body.data;
+  expect(provisional.provisional).toBe(true);
+  expect(provisional.rows[0].points).toBe(19.5);
+  expect(
+    (await call("get", `/matches/${match._id}`, userToken)).body.data.awayScore,
+  ).toBe(1);
+  expect(
+    (await call("get", `/tournaments/${t._id}/my-performance`, userToken)).body
+      .data.points,
+  ).toBe(0);
+  expect(
+    (
+      await call("post", eventPath, adminToken, {
+        player: String(ps[3]._id),
+        type: "playerOfTheMatch",
+        minute: 90,
+      })
+    ).status,
+  ).toBe(409);
+
+  const save = await MatchEvent.findOne({ type: "goalkeeperSave" });
+  expect(
+    (
+      await call("put", `/match-events/${save._id}`, adminToken, {
+        player: String(ps[0]._id),
+        type: "shotOnTarget",
+        minute: 4,
+      })
+    ).status,
+  ).toBe(200);
+  const corrected = (
+    await call("get", `/matches/${match._id}/live-performance`, userToken)
+  ).body.data;
+  expect(corrected.provisional).toBe(true);
+  expect(corrected.rows[0].points).toBe(19);
+
+  expect(
+    (
+      await call("put", `/matches/${match._id}/result`, adminToken, {
+        status: "completed",
+        homeScore: 0,
+        awayScore: 1,
+      })
+    ).status,
+  ).toBe(200);
+  const finalized = (
+    await call("get", `/matches/${match._id}/live-performance`, userToken)
+  ).body.data;
+  expect(finalized.provisional).toBe(false);
+  expect(finalized.rows[0].points).toBe(19);
+  expect(
+    (await call("get", `/tournaments/${t._id}/my-performance`, userToken)).body
+      .data.points,
+  ).toBe(19);
 });
 it("complete HTTP workflow: administration → squad → finalized events → corrections → leaderboard", async () => {
   adminToken = (

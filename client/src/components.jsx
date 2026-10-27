@@ -48,12 +48,13 @@ export function Loading() {
   );
 }
 
-export function useLoad(path, { all = false } = {}) {
+export function useLoad(path, { all = false, pollMs = 0 } = {}) {
   const [data, setData] = useState(null),
     [error, setError] = useState(""),
     [revision, setRevision] = useState(0);
   useEffect(() => {
     let alive = true;
+    let timer;
     setData(null);
     setError("");
     async function fetchData() {
@@ -70,17 +71,22 @@ export function useLoad(path, { all = false } = {}) {
       }
       return rows;
     }
-    fetchData()
-      .then((d) => {
-        if (alive) setData(d);
-      })
-      .catch((e) => {
+    async function load() {
+      try {
+        const result = await fetchData();
+        if (alive) setData(result);
+      } catch (e) {
         if (alive) setError(e.message);
-      });
+      } finally {
+        if (alive && pollMs > 0) timer = setTimeout(load, pollMs);
+      }
+    }
+    load();
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
-  }, [path, revision, all]);
+  }, [path, revision, all, pollMs]);
   return { data, error, reload: () => setRevision((n) => n + 1) };
 }
 

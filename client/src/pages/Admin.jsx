@@ -9,6 +9,10 @@ const defaults = {
   assist: 3,
   cleanSheet: 4,
   penaltySave: 5,
+  goalkeeperSave: 1,
+  shotOnTarget: 1,
+  penaltyMissed: -2,
+  playerOfTheMatch: 5,
   yellowCard: -1,
   redCard: -3,
   ownGoal: -2,
@@ -89,7 +93,20 @@ export function TournamentEditor() {
       api(`/tournaments/${id}`)
         .then((t) => {
           const keys = Object.keys(initialTournament());
-          setV(Object.fromEntries(keys.map((k) => [k, t[k]])));
+          setV(
+            Object.fromEntries(
+              keys.map((k) => [
+                k,
+                k === "scoring"
+                  ? {
+                      ...defaults,
+                      ...t.scoring,
+                      goal: { ...defaults.goal, ...t.scoring?.goal },
+                    }
+                  : t[k],
+              ]),
+            ),
+          );
           setReady(true);
         })
         .catch((e) => setError(e.message));

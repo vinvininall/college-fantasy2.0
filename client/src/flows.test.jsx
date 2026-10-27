@@ -9,13 +9,15 @@ import {
   fireEvent,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route, Link } from "react-router-dom";
 import { App } from "./App";
 import { Session } from "./session";
 import { AuthPage } from "./pages/Auth";
 import { PlayerBrowser, Leaderboard } from "./pages/Tournaments";
 import { SquadBuilder } from "./pages/Squad";
 import { RosterAdmin } from "./pages/Admin";
+import { PlayerPage } from "./pages/Tournaments";
+import { MatchPage } from "./pages/Match";
 import { api, rupees } from "./api";
 vi.mock("./api", async () => {
   const actual = await vi.importActual("./api");
@@ -117,6 +119,74 @@ it("submits a JSON roster import and reports created records", async () => {
   expect((await screen.findByRole("status")).textContent).toContain(
     "Imported 1 team and 1 player.",
   );
+});
+it("returns to the originating screen when a deleted player can no longer be loaded", async () => {
+  api.mockRejectedValue(new Error("Resource not found"));
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={["/origin"]}>
+      <Routes>
+        <Route
+          path="/origin"
+          element={
+            <Link to="/players/removed" state={{ returnTo: "/origin" }}>
+              Original player list
+            </Link>
+          }
+        />
+        <Route path="/players/:id" element={<PlayerPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  await user.click(screen.getByText("Original player list"));
+  expect(await screen.findByText("Original player list")).toBeTruthy();
+  expect(api).toHaveBeenCalledWith("/players/removed");
+});
+it("labels live match fantasy points as provisional", async () => {
+  api.mockImplementation((path) =>
+    Promise.resolve(
+      path === "/matches/m1"
+        ? {
+            _id: "m1",
+            tournament: "t1",
+            homeTeam: { name: "Falcons", shortName: "FAL" },
+            awayTeam: { name: "Wolves", shortName: "WOL" },
+            homeScore: 2,
+            awayScore: 1,
+            scheduledAt: "2026-10-27T10:00:00Z",
+            status: "live",
+          }
+        : path.includes("/live-performance")
+          ? {
+              status: "live",
+              provisional: true,
+              rows: [
+                {
+                  user: "u1",
+                  name: "Aarav",
+                  rank: 1,
+                  points: 12,
+                  details: [],
+                },
+              ],
+            }
+          : [],
+    ),
+  );
+  render(
+    <Session.Provider value={{ user: null }}>
+      <MemoryRouter initialEntries={["/matches/m1"]}>
+        <Routes>
+          <Route path="/matches/:id" element={<MatchPage />} />
+        </Routes>
+      </MemoryRouter>
+    </Session.Provider>,
+  );
+  expect(
+    await screen.findByText("Provisional fantasy-team points"),
+  ).toBeTruthy();
+  expect(screen.getByText("Aarav")).toBeTruthy();
+  expect(screen.getByText("12")).toBeTruthy();
 });
 it("submits registration and rejects mismatched confirmation", async () => {
   const login = vi.fn();

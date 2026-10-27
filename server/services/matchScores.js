@@ -15,11 +15,13 @@ export function tallyGoals(match, events, players) {
   return score;
 }
 export async function withFinalScores(matches, { force = false } = {}) {
-  const finalized = matches.filter((m) => force || m.status === "completed");
-  if (!finalized.length)
+  const scoreable = matches.filter(
+    (match) => force || ["live", "completed"].includes(match.status),
+  );
+  if (!scoreable.length)
     return matches.map((m) => (m.toObject ? m.toObject() : m));
   const events = await MatchEvent.find({
-    match: { $in: finalized.map((m) => m._id) },
+    match: { $in: scoreable.map((m) => m._id) },
     type: { $in: ["goal", "ownGoal"] },
   }).lean();
   const players = await Player.find({
@@ -29,7 +31,7 @@ export async function withFinalScores(matches, { force = false } = {}) {
     .lean();
   return matches.map((m) => {
     const result = m.toObject ? m.toObject() : m;
-    return force || m.status === "completed"
+    return force || ["live", "completed"].includes(m.status)
       ? {
           ...result,
           ...tallyGoals(
