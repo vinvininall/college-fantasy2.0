@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { auth } from "../middleware/auth.js";
 import { check } from "../services/rules.js";
 import { matchPerformance, performance } from "../services/scoring.js";
@@ -9,6 +10,7 @@ import {
   find,
   visible,
   privateTournament,
+  squadDisclosureAllowed,
 } from "../services/resources.js";
 
 export function registerPerformanceRoutes(app) {
@@ -25,16 +27,50 @@ export function registerPerformanceRoutes(app) {
   });
 
   app.get(
+    "/api/tournaments/:tournamentId/squad-disclosure",
+    privateTournament,
+    async (req, res) =>
+      send(res, {
+        allowed: await squadDisclosureAllowed(req.tournament),
+      }),
+  );
+
+  app.get(
     "/api/tournaments/:tournamentId/leaderboard",
     privateTournament,
     async (req, res) => {
       const p = await performance(req.tournament);
+      const search = req.query.name
+        ? z.string().trim().max(80).parse(req.query.name)
+        : "";
+      const rows = search
+        ? p.rows.filter((row) =>
+            row.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
+          )
+        : p.rows;
+      const { skip, limit } = page(req);
       send(
         res,
-        p.rows
-          .slice(page(req).skip, page(req).skip + page(req).limit)
-          .map(({ details, ...r }) => r),
+        rows.slice(skip, skip + limit).map(({ details, ...row }) => row),
       );
+    },
+  );
+
+  app.get(
+    "/api/tournaments/:tournamentId/managers/:userId/squad",
+    privateTournament,
+    async (req, res) => {
+      id.parse(req.params.userId);
+      check(
+        await squadDisclosureAllowed(req.tournament),
+        "Manager squads are private until rosters are locked and no match is live",
+        409,
+      );
+      const row = (await performance(req.tournament)).rows.find(
+        (manager) => String(manager.user) === req.params.userId,
+      );
+      check(row, "Manager squad not found in this tournament", 404);
+      send(res, row);
     },
   );
 

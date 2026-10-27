@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
-import { rupees, date } from "../api";
+import { api, rupees, date } from "../api";
 
-import { Field, Badge, Empty, useLoad, Async, Stat } from "../components";
+import {
+  Field,
+  Badge,
+  Notice,
+  Empty,
+  useLoad,
+  Async,
+  Stat,
+} from "../components";
 
 export function TournamentCard({ t }) {
   return (
@@ -535,16 +543,111 @@ export function Fixtures({ tournament }) {
 }
 
 export function Leaderboard({ tournament }) {
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(1),
+    [search, setSearch] = useState(""),
+    [selected, setSelected] = useState(null),
+    [squad, setSquad] = useState(null),
+    [squadError, setSquadError] = useState(""),
+    [squadBusy, setSquadBusy] = useState(false);
   const l = useLoad(
-    `/tournaments/${tournament}/leaderboard?page=${page}&limit=50`,
+    `/tournaments/${tournament}/leaderboard?page=${page}&limit=50&name=${encodeURIComponent(search)}`,
   );
+  const disclosure = useLoad(`/tournaments/${tournament}/squad-disclosure`, {
+    pollMs: 5000,
+  });
+  useEffect(() => {
+    if (!disclosure.data?.allowed) {
+      setSelected(null);
+      setSquad(null);
+    }
+  }, [disclosure.data?.allowed]);
+  async function openSquad(user) {
+    setSelected(user);
+    setSquad(null);
+    setSquadError("");
+    setSquadBusy(true);
+    try {
+      setSquad(await api(`/tournaments/${tournament}/managers/${user}/squad`));
+    } catch (error) {
+      setSquadError(error.message);
+    } finally {
+      setSquadBusy(false);
+    }
+  }
   return (
     <>
       <div className="section-heading">
         <h2>The campus standings</h2>
         <span>Finalized matches only</span>
       </div>
+      <Field
+        label="Search managers by name"
+        value={search}
+        placeholder="Find a manager…"
+        onChange={(event) => {
+          setSearch(event.target.value);
+          setPage(1);
+        }}
+      />
+      {!disclosure.data?.allowed && (
+        <p className="muted">
+          Manager squads are revealed once rosters are locked and no match is
+          live.
+        </p>
+      )}
+      {selected && (
+        <div className="panel manager-squad">
+          <div className="section-heading">
+            <h2>
+              {squad?.name ? `${squad.name}’s fantasy squad` : "Fantasy squad"}
+            </h2>
+            <button
+              className="secondary"
+              onClick={() => {
+                setSelected(null);
+                setSquad(null);
+                setSquadError("");
+              }}
+            >
+              Close
+            </button>
+          </div>
+          {squadBusy && <p role="status">Loading squad…</p>}
+          {squadError && <Notice error>{squadError}</Notice>}
+          {squad && (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Player</th>
+                    <th>Position</th>
+                    <th>Lineup</th>
+                    <th>Role</th>
+                    <th>Points</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {squad.details.map((player) => (
+                    <tr key={player.player}>
+                      <td>{player.name}</td>
+                      <td>{player.position}</td>
+                      <td>{player.role === "bench" ? "Bench" : "Starter"}</td>
+                      <td>
+                        {player.role === "captain"
+                          ? "Captain"
+                          : player.role === "vice-captain"
+                            ? "Vice-captain"
+                            : "—"}
+                      </td>
+                      <td>{player.points}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
       <Async load={l}>
         {(rows) => (
           <>
@@ -566,7 +669,18 @@ export function Leaderboard({ tournament }) {
                           {r.rank === 1 ? "♛ " : ""}
                           {r.rank}
                         </td>
-                        <td>{r.name}</td>
+                        <td>
+                          {disclosure.data?.allowed ? (
+                            <button
+                              className="quiet manager-link"
+                              onClick={() => openSquad(r.user)}
+                            >
+                              {r.name}
+                            </button>
+                          ) : (
+                            r.name
+                          )}
+                        </td>
                         <td>{r.matchesCounted}</td>
                         <td>
                           <b>{r.points}</b>

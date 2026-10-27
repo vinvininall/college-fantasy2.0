@@ -346,6 +346,98 @@ it("leaderboard displays final points and shared ranks", async () => {
   expect(await screen.findByText("Aarav")).toBeTruthy();
   expect(screen.getAllByText("14.5")).toHaveLength(2);
 });
+it("searches managers and displays a disclosed squad with roles and points", async () => {
+  api.mockImplementation((path) =>
+    Promise.resolve(
+      path === "/tournaments/t1/squad-disclosure"
+        ? { allowed: true }
+        : path.includes("/managers/u1/squad")
+          ? {
+              user: "u1",
+              name: "Aarav",
+              points: 15,
+              details: [
+                {
+                  player: "p1",
+                  name: "Aarav Demo",
+                  position: "FWD",
+                  role: "captain",
+                  points: 10,
+                },
+                {
+                  player: "p2",
+                  name: "Kabir Demo",
+                  position: "GK",
+                  role: "bench",
+                  points: 0,
+                },
+                {
+                  player: "p3",
+                  name: "Mira Demo",
+                  position: "MID",
+                  role: "vice-captain",
+                  points: 5,
+                },
+              ],
+            }
+          : [
+              {
+                user: "u1",
+                name: "Aarav",
+                points: 15,
+                rank: 1,
+                matchesCounted: 1,
+              },
+            ],
+    ),
+  );
+  const user = userEvent.setup();
+  render(
+    <MemoryRouter>
+      <Leaderboard tournament="t1" />
+    </MemoryRouter>,
+  );
+  await user.type(screen.getByLabelText("Search managers by name"), "Aar");
+  await user.click(await screen.findByRole("button", { name: "Aarav" }));
+  expect(await screen.findByText("Aarav Demo")).toBeTruthy();
+  expect(screen.getByText("Captain")).toBeTruthy();
+  expect(screen.getByText("Vice-captain")).toBeTruthy();
+  expect(screen.getByText("Bench")).toBeTruthy();
+  expect(api).toHaveBeenCalledWith(
+    expect.stringContaining("/leaderboard?page=1&limit=50&name=Aar"),
+  );
+  expect(api).toHaveBeenCalledWith("/tournaments/t1/managers/u1/squad");
+});
+it("keeps manager names non-interactive while squad disclosure is locked", async () => {
+  api.mockImplementation((path) =>
+    Promise.resolve(
+      path.endsWith("/squad-disclosure")
+        ? { allowed: false }
+        : [
+            {
+              user: "u1",
+              name: "Aarav",
+              points: 15,
+              rank: 1,
+              matchesCounted: 1,
+            },
+          ],
+    ),
+  );
+  render(
+    <MemoryRouter>
+      <Leaderboard tournament="t1" />
+    </MemoryRouter>,
+  );
+  expect(
+    await screen.findByText(
+      /Manager squads are revealed once rosters are locked/,
+    ),
+  ).toBeTruthy();
+  expect(screen.getByText("Aarav")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Aarav" })).toBeNull();
+  expect(api).not.toHaveBeenCalledWith("/tournaments/t1/managers/u1/squad");
+});
 it("waits for restoration and hides admin controls from normal users", async () => {
   localStorage.setItem("sfl-token", "existing");
   let restore;

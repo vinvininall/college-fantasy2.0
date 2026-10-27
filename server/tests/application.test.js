@@ -1014,6 +1014,84 @@ it("keeps live fantasy points provisional, updates live scores, and finalizes on
       .data.points,
   ).toBe(19);
 });
+it("searches managers and reveals same-tournament squads only after roster lock and outside live play", async () => {
+  const t = await tournament("upcoming");
+  const { a, b, ps } = await roster(t);
+  const otherUser = await User.findOne({ email: "other@example.test" });
+  const squadPath = `/tournaments/${t._id}/managers/${otherUser._id}/squad`;
+  const squad = squadBody(ps);
+  expect(
+    (await call("put", `/tournaments/${t._id}/my-squad`, userToken, squad))
+      .status,
+  ).toBe(200);
+  expect(
+    (await call("put", `/tournaments/${t._id}/my-squad`, otherToken, squad))
+      .status,
+  ).toBe(200);
+  expect((await call("get", squadPath, userToken)).status).toBe(409);
+  const match = await Match.create({
+    tournament: t._id,
+    homeTeam: a._id,
+    awayTeam: b._id,
+    scheduledAt: new Date(),
+    status: "live",
+    homeScore: 0,
+    awayScore: 0,
+  });
+  await MatchEvent.create({
+    match: match._id,
+    player: ps[4]._id,
+    type: "goal",
+    minute: 20,
+    recordedBy: (await User.findOne({ role: "admin" }))._id,
+  });
+
+  const search = await call(
+    "get",
+    `/tournaments/${t._id}/leaderboard?name=oThEr`,
+    userToken,
+  );
+  expect(search.status).toBe(200);
+  expect(search.body.data).toHaveLength(1);
+  expect(search.body.data[0].name).toBe("Other manager");
+  expect(search.body.data[0].details).toBeUndefined();
+
+  expect((await call("get", squadPath, userToken)).status).toBe(409);
+
+  await call("patch", `/tournaments/${t._id}/status`, adminToken, {
+    status: "active",
+  });
+  expect((await call("get", squadPath, userToken)).status).toBe(409);
+  await Match.updateOne({ _id: match._id }, { $set: { status: "completed" } });
+  const visible = await call("get", squadPath, userToken);
+  expect(visible.status).toBe(200);
+  expect(visible.body.data.details).toHaveLength(ps.length);
+  expect(
+    visible.body.data.details.find(
+      (detail) => detail.player === String(ps[4]._id),
+    ),
+  ).toMatchObject({
+    name: "Player 4",
+    role: "captain",
+    points: 10,
+  });
+  expect(
+    visible.body.data.details.find(
+      (detail) => detail.player === String(ps[5]._id),
+    ),
+  ).toMatchObject({ role: "bench", points: 0 });
+
+  const otherTournament = await tournament("completed");
+  expect(
+    (
+      await call(
+        "get",
+        `/tournaments/${otherTournament._id}/managers/${otherUser._id}/squad`,
+        userToken,
+      )
+    ).status,
+  ).toBe(404);
+});
 it("complete HTTP workflow: administration → squad → finalized events → corrections → leaderboard", async () => {
   adminToken = (
     await request(app)

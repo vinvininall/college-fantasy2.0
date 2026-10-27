@@ -216,6 +216,8 @@ Assists reference one recorded goal, at the same minute, by a different player o
 
 Admins can record, correct, and remove events while a match is live. Match centres poll for score, event, and provisional fantasy-team-point updates every five seconds without a manual refresh. Live points are clearly provisional and do not enter official standings; completing a match recalculates and includes its points in tournament standings.
 
+Manager squads are disclosed once the tournament's squad-registration rules lock roster changes and no match is currently live. While registration remains open and before kickoff, or during a live match, manager details remain private. Squad details are scoped to their tournament and include starters, bench, captain/vice-captain, and finalized per-player points.
+
 Actual substitutions, minutes played, automatic clean-sheet duration qualification, penalty conversion events, transfer windows, per-match lineup changes and automatic bench substitutions are **not implemented**. Administrators must verify participation/clean-sheet eligibility themselves. The same frozen fantasy lineup scores throughout a tournament. Two distinct same-type contributions by one player in the same integer minute require correcting the time representation before entry; second-level event timing is a future improvement.
 
 ## REST API
@@ -224,33 +226,35 @@ All paths begin with `/api`. Success: `{ "data": ... }`. Failure: `{ "error": { 
 
 List endpoints accept `page` (default 1) and `limit` (default 50, maximum 100), except `/my-squads`, which returns the current user's collection. Public fixture and player browsers and the leaderboard have paging controls. Team/player selectors, administration registries and match timelines collect all pages in batches of 100, without silently truncating records.
 
-| Method           | Path                                                       | Access                                |
-| ---------------- | ---------------------------------------------------------- | ------------------------------------- |
-| GET              | `/health`                                                  | Public                                |
-| POST             | `/auth/register`, `/auth/login`                            | Public, rate limited                  |
-| GET              | `/auth/me`                                                 | Signed in                             |
-| GET              | `/tournaments`                                             | Public, no drafts                     |
-| GET              | `/admin/tournaments`                                       | Admin, including drafts               |
-| POST             | `/tournaments`                                             | Admin                                 |
-| GET, PUT         | `/tournaments/:tournamentId`                               | Read public/admin drafts; write admin |
-| PATCH            | `/tournaments/:tournamentId/status`                        | Admin                                 |
-| GET, POST        | `/tournaments/:tournamentId/teams`                         | Read public/admin drafts; write admin |
-| GET, PUT, DELETE | `/teams/:teamId`                                           | Read public/admin drafts; write admin |
-| GET, POST        | `/teams/:teamId/players`                                   | Read public/admin drafts; write admin |
-| GET              | `/tournaments/:tournamentId/players`                       | Filters: `search`, `team`, `position` |
-| GET, PUT, DELETE | `/players/:playerId`                                       | Read public/admin drafts; write admin |
-| GET, PUT         | `/tournaments/:tournamentId/my-squad`                      | Signed in; current owner only         |
-| GET              | `/my-squads`                                               | Signed in; current owner only         |
-| GET              | `/tournaments/:tournamentId/participation`                 | Admin                                 |
-| GET, POST        | `/tournaments/:tournamentId/matches`                       | Read public/admin drafts; write admin |
-| GET, PUT         | `/matches/:matchId`                                        | Read public/admin drafts; write admin |
-| PUT              | `/matches/:matchId/result`                                 | Admin                                 |
-| GET, POST        | `/matches/:matchId/events`                                 | Read public/admin drafts; write admin |
-| PUT, DELETE      | `/match-events/:eventId`                                   | Admin                                 |
-| GET              | `/matches/:matchId/live-performance`                       | Public live provisional/final points  |
-| GET              | `/tournaments/:tournamentId/leaderboard`                   | Public/admin drafts                   |
-| GET              | `/tournaments/:tournamentId/my-performance`                | Current signed-in user                |
-| GET              | `/tournaments/:tournamentId/players/:playerId/performance` | Public/admin drafts                   |
+| Method           | Path                                                       | Access                                  |
+| ---------------- | ---------------------------------------------------------- | --------------------------------------- |
+| GET              | `/health`                                                  | Public                                  |
+| POST             | `/auth/register`, `/auth/login`                            | Public, rate limited                    |
+| GET              | `/auth/me`                                                 | Signed in                               |
+| GET              | `/tournaments`                                             | Public, no drafts                       |
+| GET              | `/admin/tournaments`                                       | Admin, including drafts                 |
+| POST             | `/tournaments`                                             | Admin                                   |
+| GET, PUT         | `/tournaments/:tournamentId`                               | Read public/admin drafts; write admin   |
+| PATCH            | `/tournaments/:tournamentId/status`                        | Admin                                   |
+| GET, POST        | `/tournaments/:tournamentId/teams`                         | Read public/admin drafts; write admin   |
+| GET, PUT, DELETE | `/teams/:teamId`                                           | Read public/admin drafts; write admin   |
+| GET, POST        | `/teams/:teamId/players`                                   | Read public/admin drafts; write admin   |
+| GET              | `/tournaments/:tournamentId/players`                       | Filters: `search`, `team`, `position`   |
+| GET, PUT, DELETE | `/players/:playerId`                                       | Read public/admin drafts; write admin   |
+| GET, PUT         | `/tournaments/:tournamentId/my-squad`                      | Signed in; current owner only           |
+| GET              | `/my-squads`                                               | Signed in; current owner only           |
+| GET              | `/tournaments/:tournamentId/participation`                 | Admin                                   |
+| GET, POST        | `/tournaments/:tournamentId/matches`                       | Read public/admin drafts; write admin   |
+| GET, PUT         | `/matches/:matchId`                                        | Read public/admin drafts; write admin   |
+| PUT              | `/matches/:matchId/result`                                 | Admin                                   |
+| GET, POST        | `/matches/:matchId/events`                                 | Read public/admin drafts; write admin   |
+| PUT, DELETE      | `/match-events/:eventId`                                   | Admin                                   |
+| GET              | `/matches/:matchId/live-performance`                       | Public live provisional/final points    |
+| GET              | `/tournaments/:tournamentId/leaderboard`                   | Public/admin drafts                     |
+| GET              | `/tournaments/:tournamentId/squad-disclosure`              | Public disclosure availability          |
+| GET              | `/tournaments/:tournamentId/managers/:userId/squad`        | Public after roster lock; no live match |
+| GET              | `/tournaments/:tournamentId/my-performance`                | Current signed-in user                  |
+| GET              | `/tournaments/:tournamentId/players/:playerId/performance` | Public/admin drafts                     |
 
 Example partial squad request (use real IDs from your database):
 

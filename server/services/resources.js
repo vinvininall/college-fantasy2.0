@@ -62,6 +62,24 @@ export async function mutable(tournament) {
   return t;
 }
 
+export async function squadDisclosureAllowed(tournament) {
+  const liveMatch = await Match.exists({
+    tournament: tournament._id,
+    status: "live",
+  });
+  if (liveMatch) return false;
+  const kickoffPassed = await Match.exists({
+    tournament: tournament._id,
+    status: { $ne: "cancelled" },
+    scheduledAt: { $lte: new Date() },
+  });
+  return (
+    tournament.status !== "upcoming" ||
+    !tournament.registrationEnabled ||
+    !!kickoffPassed
+  );
+}
+
 export async function rosterEditable(tournament) {
   const t = await mutable(tournament);
   check(
