@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import React from "react";
 import { it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  cleanup,
+  fireEvent,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { App } from "./App";
@@ -9,6 +15,7 @@ import { Session } from "./session";
 import { AuthPage } from "./pages/Auth";
 import { PlayerBrowser, Leaderboard } from "./pages/Tournaments";
 import { SquadBuilder } from "./pages/Squad";
+import { RosterAdmin } from "./pages/Admin";
 import { api, rupees } from "./api";
 vi.mock("./api", async () => {
   const actual = await vi.importActual("./api");
@@ -71,6 +78,45 @@ it("toggles and remembers the selected color theme", async () => {
   );
   expect(document.documentElement.dataset.theme).toBe("light");
   expect(localStorage.getItem("sfl-theme")).toBe("light");
+});
+it("submits a JSON roster import and reports created records", async () => {
+  api.mockImplementation((path) =>
+    path.includes("/roster/import")
+      ? Promise.resolve({ teams: 1, players: 1 })
+      : Promise.resolve([]),
+  );
+  const user = userEvent.setup();
+  render(<RosterAdmin tournament="t1" />);
+  const roster = {
+    teams: [
+      {
+        name: "Falcons",
+        shortName: "FAL",
+        players: [
+          {
+            name: "Aarav Sharma",
+            position: "FWD",
+            auctionPrice: 500,
+            fantasyPrice: 120,
+          },
+        ],
+      },
+    ],
+  };
+  fireEvent.change(
+    await screen.findByRole("textbox", { name: "Roster JSON" }),
+    {
+      target: { value: JSON.stringify(roster) },
+    },
+  );
+  await user.click(screen.getByRole("button", { name: "Import roster" }));
+  expect(api).toHaveBeenCalledWith("/tournaments/t1/roster/import", {
+    method: "POST",
+    body: roster,
+  });
+  expect((await screen.findByRole("status")).textContent).toContain(
+    "Imported 1 team and 1 player.",
+  );
 });
 it("submits registration and rejects mismatched confirmation", async () => {
   const login = vi.fn();

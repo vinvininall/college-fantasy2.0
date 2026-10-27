@@ -20,6 +20,48 @@ import {
 } from "../services/resources.js";
 import { mutate } from "../middleware/mutations.js";
 
+const rosterImportSchema = z
+  .object({
+    teams: z
+      .array(
+        teamSchema
+          .extend({ players: z.array(playerSchema).max(100).default([]) })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+  })
+  .strict()
+  .superRefine(({ teams }, context) => {
+    if (teams.reduce((total, team) => total + team.players.length, 0) > 1000)
+      context.addIssue({
+        code: "custom",
+        path: ["teams"],
+        message: "Import cannot contain more than 1000 players",
+      });
+
+    const names = new Set();
+    const shortNames = new Set();
+    teams.forEach((team, index) => {
+      const name = team.name.toLocaleLowerCase();
+      const shortName = team.shortName.toUpperCase();
+      if (names.has(name))
+        context.addIssue({
+          code: "custom",
+          path: ["teams", index, "name"],
+          message: "Team names must be unique within the import",
+        });
+      if (shortNames.has(shortName))
+        context.addIssue({
+          code: "custom",
+          path: ["teams", index, "shortName"],
+          message: "Team short names must be unique within the import",
+        });
+      names.add(name);
+      shortNames.add(shortName);
+    });
+  });
+
 export function registerRosterRoutes(app) {
   app.get(
     "/api/tournaments/:tournamentId/teams",
@@ -32,6 +74,64 @@ export function registerRosterRoutes(app) {
           .skip(page(req).skip)
           .limit(page(req).limit),
       ),
+  );
+
+  mutate(
+    app,
+    "post",
+    "/api/tournaments/:tournamentId/roster/import",
+    auth,
+    admin,
+    async (req, res) => {
+      const tournament = await rosterEditable(req.params.tournamentId);
+      const { teams: input } = rosterImportSchema.parse(req.body);
+      const existing = await Team.find({ tournament: tournament._id })
+        .select("name shortName")
+        .collation({ locale: "en", strength: 2 });
+      const existingNames = new Set(
+        existing.map((team) => team.name.toLocaleLowerCase()),
+      );
+      const existingShortNames = new Set(
+        existing.map((team) => team.shortName.toUpperCase()),
+      );
+      check(
+        input.every(
+          (team) =>
+            !existingNames.has(team.name.toLocaleLowerCase()) &&
+            !existingShortNames.has(team.shortName.toUpperCase()),
+        ),
+        "A team name or short name already exists in this tournament",
+        409,
+      );
+
+      const teamDocs = input.map(({ players, ...team }) => ({
+        ...team,
+        tournament: tournament._id,
+      }));
+      const insertedTeams = teamDocs.map((team) => new Team(team));
+      const teamIds = insertedTeams.map((team) => team._id);
+      const playerDocs = input.flatMap((team, index) =>
+        team.players.map((player) => ({
+          ...player,
+          team: teamIds[index],
+        })),
+      );
+      try {
+        await Team.insertMany(insertedTeams);
+        if (playerDocs.length) await Player.insertMany(playerDocs);
+      } catch (error) {
+        await Promise.all([
+          Player.deleteMany({ team: { $in: teamIds } }),
+          Team.deleteMany({ _id: { $in: teamIds } }),
+        ]);
+        throw error;
+      }
+      send(
+        res,
+        { teams: insertedTeams.length, players: playerDocs.length },
+        201,
+      );
+    },
   );
 
   mutate(

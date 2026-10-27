@@ -340,6 +340,78 @@ describe("Tournament, teams and players", () => {
       ).status,
     ).toBe(404);
   });
+  it("imports multiple teams and players from validated JSON", async () => {
+    const t = await tournament();
+    const response = await call(
+      "post",
+      `/tournaments/${t._id}/roster/import`,
+      adminToken,
+      {
+        teams: [
+          {
+            name: "Falcons",
+            shortName: "FAL",
+            players: [
+              {
+                name: "Aarav Sharma",
+                position: "FWD",
+                auctionPrice: 500,
+                fantasyPrice: 120,
+                jerseyNumber: 10,
+              },
+            ],
+          },
+          {
+            name: "Wolves",
+            shortName: "WOL",
+            players: [
+              {
+                name: "Mira Patel",
+                position: "GK",
+                auctionPrice: 400,
+                fantasyPrice: 110,
+              },
+            ],
+          },
+        ],
+      },
+    );
+    expect(response.status).toBe(201);
+    expect(response.body.data).toEqual({ teams: 2, players: 2 });
+    expect(await Team.countDocuments({ tournament: t._id })).toBe(2);
+    expect(await Player.countDocuments()).toBe(2);
+    expect(
+      await Player.findOne({ name: "Aarav Sharma" }).populate("team"),
+    ).toMatchObject({ team: { name: "Falcons" } });
+  });
+  it("rejects invalid and duplicate roster imports without creating partial records", async () => {
+    const t = await tournament();
+    const response = await call(
+      "post",
+      `/tournaments/${t._id}/roster/import`,
+      adminToken,
+      {
+        teams: [
+          {
+            name: "Falcons",
+            shortName: "FAL",
+            players: [
+              {
+                name: "Invalid Player",
+                position: "STR",
+                auctionPrice: 500,
+                fantasyPrice: 120,
+              },
+            ],
+          },
+          { name: "Falcons", shortName: "FAL" },
+        ],
+      },
+    );
+    expect(response.status).toBe(400);
+    expect(await Team.countDocuments({ tournament: t._id })).toBe(0);
+    expect(await Player.countDocuments()).toBe(0);
+  });
   it("validates positions/prices/relationships and safe deletions", async () => {
     const t = await tournament(),
       { a, ps } = await roster(t);

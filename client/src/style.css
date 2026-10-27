@@ -1268,6 +1268,14 @@ summary {
 .timeline .badge {
   font-size: 9px;
 }
+.import-example {
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-alt);
+  font-size: 12px;
+}
 :root[data-theme="dark"] {
   color-scheme: dark;
   color: var(--text);

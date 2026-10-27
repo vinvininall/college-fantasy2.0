@@ -58,6 +58,7 @@ The demo seed's disabled organizer account cannot sign in and has no administrat
 - Configure independent 5v5, 6v6, 7v7, 9v9 and 11v11 tournaments, budgets, formations and scoring.
 - Save an incomplete squad, select starters, assign captain and vice-captain, and complete the squad.
 - Manage teams, prices, player positions, fixtures, results and match events as an administrator.
+- Import up to 100 teams and 1,000 players per tournament using a validated JSON roster.
 - Correct events and immediately see recalculated fantasy points and finalized match scores.
 - View shared leaderboard ranks, personal performance and individual point breakdowns.
 - Use the responsive interface on desktop, tablet and mobile, with keyboard focus styles and labeled forms.

@@ -495,16 +495,17 @@ export function RosterAdmin({ tournament }) {
     [editPlayer, setEditPlayer] = useState(""),
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
+    [importJson, setImportJson] = useState(""),
     [busy, setBusy] = useState(false);
   async function perform(fn) {
     setError("");
     setMessage("");
     setBusy(true);
     try {
-      await fn();
+      const result = await fn();
       teams.reload();
       players.reload();
-      setMessage("Roster updated.");
+      setMessage(result || "Roster updated.");
     } catch (e) {
       setError(e.message);
     } finally {
@@ -523,6 +524,75 @@ export function RosterAdmin({ tournament }) {
     <div className="stack">
       {error && <Notice error>{error}</Notice>}
       {message && <Notice>{message}</Notice>}
+      <form
+        className="panel stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          perform(async () => {
+            let roster;
+            try {
+              roster = JSON.parse(importJson);
+            } catch {
+              throw new Error("Import must be valid JSON.");
+            }
+            const result = await api(
+              `/tournaments/${tournament}/roster/import`,
+              { method: "POST", body: roster },
+            );
+            setImportJson("");
+            const teamLabel = result.teams === 1 ? "team" : "teams";
+            const playerLabel = result.players === 1 ? "player" : "players";
+            return `Imported ${result.teams} ${teamLabel} and ${result.players} ${playerLabel}.`;
+          });
+        }}
+      >
+        <div>
+          <h2>Import teams and players</h2>
+          <p>
+            Add multiple teams and their players in one JSON import. It will
+            create new records only; team names and short names must not already
+            exist in this tournament. Maximum 100 teams and 1,000 players.
+          </p>
+        </div>
+        <details>
+          <summary>View JSON format</summary>
+          <pre className="import-example">{`{
+  "teams": [
+    {
+      "name": "Falcons",
+      "shortName": "FAL",
+      "players": [
+        {
+          "name": "Aarav Sharma",
+          "position": "FWD",
+          "auctionPrice": 500000,
+          "fantasyPrice": 120000,
+          "jerseyNumber": 10
+        }
+      ]
+    }
+  ]
+}`}</pre>
+          <small>
+            Positions: GK, DEF, MID, FWD. Prices must be whole numbers. Optional
+            fields: logoUrl, photoUrl, jerseyNumber.
+          </small>
+        </details>
+        <Field label="Roster JSON">
+          <textarea
+            aria-label="Roster JSON"
+            required
+            rows={12}
+            spellCheck={false}
+            value={importJson}
+            onChange={(e) => setImportJson(e.target.value)}
+            placeholder='{"teams":[...]}'
+          />
+        </Field>
+        <button disabled={busy || !importJson.trim()}>
+          {busy ? "Importing…" : "Import roster"}
+        </button>
+      </form>
       <div className="grid two">
         <form
           className="panel stack"

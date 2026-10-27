@@ -35,7 +35,7 @@ app.use(
   }),
 );
 
-app.use(express.json({ limit: "100kb" }));
+app.use(express.json({ limit: "1mb" }));
 
 app.get("/api/health", (req, res) =>
   res.status(mongoose.connection.readyState === 1 ? 200 : 503).json({
