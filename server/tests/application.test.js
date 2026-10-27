@@ -49,7 +49,7 @@ const sign = (u) =>
   });
 async function call(method, path, token, body) {
   const r = request(app)
-    [method](`/api${path}`)
+  [method](`/api${path}`)
     .set(auth(token || userToken));
   return body === undefined ? r : r.send(body);
 }
@@ -985,7 +985,7 @@ it("keeps live fantasy points provisional, updates live scores, and finalizes on
   });
   expect(
     managerPoints.details.find((row) => row.player === String(ps[4]._id)),
-  ).toMatchObject({ base: 5, points: 10, role: "captain" });
+  ).toMatchObject({ base: 11, points: 22, role: "captain" });
   expect(
     (
       await call("post", eventPath, adminToken, {
@@ -1221,10 +1221,21 @@ it("complete HTTP workflow: administration → squad → finalized events → co
     type: "goal",
     minute: 30,
   });
-  expect(
-    (await call("get", `/tournaments/${tid}/my-performance`, userToken)).body
-      .data.points,
-  ).toBe(0);
+  const livePerf = (
+    await call(
+      "get",
+      `/tournaments/${tid}/my-performance`,
+      userToken,
+    )
+  ).body.data;
+
+  expect(livePerf).toMatchObject({
+    points: 14.5,
+    finalizedPoints: 0,
+    livePoints: 14.5,
+    provisional: true,
+    liveMatchesCounted: 1,
+  });
   expect(
     (
       await call("put", `/matches/${fixture._id}/result`, adminToken, {
