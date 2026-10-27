@@ -2,7 +2,19 @@ name: Application checks
 
 on: [push, pull_request]
 
-jobs: test: runs-on: ubuntu-latest services: mongodb: image: mongo:8 ports: ["27017:27017"] options: >- --health-cmd "mongosh --quiet --eval 'quit(db.runCommand({ping:1}).ok ? 0 : 1)'" --health-interval 10s --health-timeout 5s --health-start-period 20s --health-retries 10
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    services:
+      mongodb:
+        image: mongo:8
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'quit(db.runCommand({ping:1}).ok ? 0 : 1)'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-start-period 20s
+          --health-retries 10
 
 steps:
   - uses: actions/checkout@v4
